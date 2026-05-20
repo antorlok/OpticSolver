@@ -1,10 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-import os
 
 from solvers.transport_solver import TransportSolver
 from solvers.northwest_solver import NorthwestCornerSolver
-from core.base_solver import BaseTransportSolver
 from solvers.vogel_solver import VogelSolver
 from services.groq_client import GroqClient
 
@@ -303,12 +301,7 @@ class CalculadoraGUI:
             content.append(f"  • {step}")
             
         content.append("\n📊 MATRIZ DE ASIGNACIONES FINALES:")
-        alloc_matrix = BaseTransportSolver.format_matrix(
-            result.allocation_matrix,
-            row_labels=result.row_labels,
-            col_labels=result.col_labels
-        )
-        content.append(alloc_matrix)
+        content.append(result.formatted_allocation_matrix)
         
         content.append(f"\n💰 COSTO TOTAL MÍNIMO: {result.total_cost:.2f}")
         return "\n".join(content)
@@ -324,17 +317,9 @@ class CalculadoraGUI:
         try:
             client = GroqClient()
             
-            balance_info = "Balanceado."
-            if not result.balanced:
-                if result.dummy_type == "column":
-                    balance_info = "Se agregó ciudad ficticia por exceso de oferta."
-                else:
-                    balance_info = "Se agregó planta ficticia por exceso de demanda."
-                    
-            cost_table = BaseTransportSolver.format_matrix(
-                result.cost_matrix_used, row_labels=result.row_labels, col_labels=result.col_labels)
-            allocation_table = BaseTransportSolver.format_matrix(
-                result.allocation_matrix, row_labels=result.row_labels, col_labels=result.col_labels)
+            balance_info = result.balance_info
+            cost_table = result.formatted_cost_matrix
+            allocation_table = result.formatted_allocation_matrix
             
             conclusion = client.generate_conclusion(
                 cost_table=cost_table,

@@ -57,8 +57,7 @@ class VogelSolver(BaseTransportSolver):
                             f"Asignación = {alloc:.2f}. Oferta restante = {supply[i]:.2f}, "
                             f"Demanda restante = {demand[j]:.2f}."
                         )
-                        steps.append("  Matriz de asignaciones actual:")
-                        steps.append(self.format_matrix(allocation, row_labels, col_labels))
+                        self._add_allocation_step(steps, allocation, row_labels, col_labels)
                 break
 
             # Si solo queda una columna activa, asignar por menor costo en esa columna
@@ -78,8 +77,7 @@ class VogelSolver(BaseTransportSolver):
                             f"Asignación = {alloc:.2f}. Oferta restante = {supply[i]:.2f}, "
                             f"Demanda restante = {demand[j]:.2f}."
                         )
-                        steps.append("  Matriz de asignaciones actual:")
-                        steps.append(self.format_matrix(allocation, row_labels, col_labels))
+                        self._add_allocation_step(steps, allocation, row_labels, col_labels)
                 break
 
             # Calcular penalizaciones de filas
@@ -164,7 +162,6 @@ class VogelSolver(BaseTransportSolver):
                 active_cols[j] = False
                 steps.append(f"  → Se tachó la columna {j}.")
             
-            steps.append("  Matriz de asignaciones actual:")
-            steps.append(self.format_matrix(allocation, row_labels, col_labels))
+            self._add_allocation_step(steps, allocation, row_labels, col_labels)
 
         return allocation

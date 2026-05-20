@@ -107,7 +107,6 @@ class TransportSolver(BaseTransportSolver):
             elif demand[j] == 0:
                 cancelled_cols[j] = True
             
-            steps.append("  Matriz de asignaciones actual:")
-            steps.append(self.format_matrix(allocation, row_labels, col_labels))
+            self._add_allocation_step(steps, allocation, row_labels, col_labels)
 
         return allocation

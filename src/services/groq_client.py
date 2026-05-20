@@ -7,6 +7,7 @@ La clave de API se lee exclusivamente de variables de entorno.
 
 import os
 from typing import Optional
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
 load_dotenv()

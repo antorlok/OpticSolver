@@ -28,6 +28,41 @@ class TransportResult:
     col_labels: List[str] = field(default_factory=list)
     steps: List[str] = field(default_factory=list)
 
+    @property
+    def balance_info(self) -> str:
+        """Construye la descripción textual del estado de balanceo (DRY)."""
+        if self.balanced:
+            return "El problema estaba balanceado (Oferta == Demanda). No se agregaron ficticios."
+
+        if self.dummy_type == "column":
+            return (
+                f"Oferta ({sum(self.original_supply):.2f}) > Demanda ({sum(self.original_demand):.2f}). "
+                f"Se agregó una CIUDAD FICTICIA (columna) con costo 0 para absorber el excedente."
+            )
+
+        return (
+            f"Demanda ({sum(self.original_demand):.2f}) > Oferta ({sum(self.original_supply):.2f}). "
+            f"Se agregó una PLANTA FICTICIA (fila) con costo 0 para cubrir el déficit."
+        )
+
+    @property
+    def formatted_allocation_matrix(self) -> str:
+        """Retorna la representación tabular de la matriz de asignación."""
+        return BaseTransportSolver.format_matrix(
+            self.allocation_matrix,
+            row_labels=self.row_labels,
+            col_labels=self.col_labels
+        )
+
+    @property
+    def formatted_cost_matrix(self) -> str:
+        """Retorna la representación tabular de la matriz de costos utilizada."""
+        return BaseTransportSolver.format_matrix(
+            self.cost_matrix_used,
+            row_labels=self.row_labels,
+            col_labels=self.col_labels
+        )
+
 
 class BaseTransportSolver:
     """
@@ -259,6 +294,17 @@ class BaseTransportSolver:
             NotImplementedError: Si no es sobreescrito por la subclase.
         """
         raise NotImplementedError("Las subclases deben implementar _allocate()")
+
+    def _add_allocation_step(
+        self,
+        steps: List[str],
+        allocation: List[List[float]],
+        row_labels: List[str],
+        col_labels: List[str],
+    ) -> None:
+        """Registra la matriz de asignaciones actual en los pasos del algoritmo (DRY)."""
+        steps.append("  Matriz de asignaciones actual:")
+        steps.append(self.format_matrix(allocation, row_labels, col_labels))
 
     # ──────────────────────────── Formateo ─────────────────────────────────────
 
