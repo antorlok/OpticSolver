@@ -1,5 +1,10 @@
 # 🧮 OpticSolver
 
+![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Groq](https://img.shields.io/badge/Groq-AI-orange.svg)
+![GUI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)
+
 Una calculadora avanzada y moderna para resolver problemas de Investigación de Operaciones (Programación Matemática), específicamente enfocada en problemas de transporte y optimización logística. Implementada con Python y una arquitectura modular, separando limpiamente la lógica de negocio, servicios externos (AI) y presentación gráfica.
 
 ---
