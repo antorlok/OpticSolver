@@ -65,6 +65,10 @@ class NorthwestCornerSolver(BaseTransportSolver):
                 # Demanda agotada: avanzar a la siguiente columna
                 j += 1
             
-            self._add_allocation_step(steps, allocation, row_labels, col_labels)
+            self._add_allocation_step(
+                steps, allocation, row_labels, col_labels,
+                supply_remaining=list(supply),
+                demand_remaining=list(demand),
+            )
 
         return allocation

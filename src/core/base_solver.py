@@ -301,10 +301,20 @@ class BaseTransportSolver:
         allocation: List[List[float]],
         row_labels: List[str],
         col_labels: List[str],
+        supply_remaining: Optional[List[float]] = None,
+        demand_remaining: Optional[List[float]] = None,
+        row_penalties: Optional[List[Optional[float]]] = None,
+        col_penalties: Optional[List[Optional[float]]] = None,
     ) -> None:
         """Registra la matriz de asignaciones actual en los pasos del algoritmo (DRY)."""
         steps.append("  Matriz de asignaciones actual:")
-        steps.append(self.format_matrix(allocation, row_labels, col_labels))
+        steps.append(self.format_matrix(
+            allocation, row_labels, col_labels,
+            supply_remaining=supply_remaining,
+            demand_remaining=demand_remaining,
+            row_penalties=row_penalties,
+            col_penalties=col_penalties,
+        ))
 
     # ──────────────────────────── Formateo ─────────────────────────────────────
 
@@ -313,8 +323,20 @@ class BaseTransportSolver:
         matrix: List[List[float]],
         row_labels: Optional[List[str]] = None,
         col_labels: Optional[List[str]] = None,
+        supply_remaining: Optional[List[float]] = None,
+        demand_remaining: Optional[List[float]] = None,
+        row_penalties: Optional[List[Optional[float]]] = None,
+        col_penalties: Optional[List[Optional[float]]] = None,
     ) -> str:
-        """Genera una representación tabular legible de una matriz."""
+        """
+        Genera una representación tabular legible de una matriz.
+
+        Parámetros opcionales para mostrar contexto completo de cada iteración:
+        - supply_remaining: vector de oferta restante (columna "Oferta" a la derecha).
+        - demand_remaining: vector de demanda restante (fila "Demanda" al fondo).
+        - row_penalties: penalizaciones por fila (columna "Pen.F", solo Vogel).
+        - col_penalties: penalizaciones por columna (fila "Pen.C", solo Vogel).
+        """
         m = len(matrix)
         n = len(matrix[0]) if m else 0
 
@@ -323,16 +345,72 @@ class BaseTransportSolver:
         if col_labels is None:
             col_labels = [f"D{j+1}" for j in range(n)]
 
+        # ── Helpers para formatear valores opcionales ──
+        def _fmt(val: Optional[float]) -> str:
+            return "—" if val is None else f"{val:.2f}"
+
+        # ── Calcular ancho de columna considerando todas las piezas ──
+        extra_vals: List[str] = []
+        if supply_remaining:
+            extra_vals += [_fmt(v) for v in supply_remaining]
+        if demand_remaining:
+            extra_vals += [_fmt(v) for v in demand_remaining]
+        if row_penalties:
+            extra_vals += [_fmt(v) for v in row_penalties]
+        if col_penalties:
+            extra_vals += [_fmt(v) for v in col_penalties]
+
+        extra_labels = []
+        if supply_remaining is not None:
+            extra_labels.append("Oferta")
+        if row_penalties is not None:
+            extra_labels.append("Pen.F")
+
         col_width = max(
             max((len(f"{matrix[i][j]:.2f}") for i in range(m) for j in range(n)), default=6),
             max((len(lbl) for lbl in col_labels), default=4),
             max((len(lbl) for lbl in row_labels), default=4),
+            max((len(s) for s in extra_vals), default=0),
+            max((len(s) for s in extra_labels), default=0),
+            len("Demanda"), len("Pen.C"),
         )
 
-        header = " " * (col_width + 2) + "  ".join(lbl.rjust(col_width) for lbl in col_labels)
+        # ── Cabecera ──
+        header_parts = [lbl.rjust(col_width) for lbl in col_labels]
+        if supply_remaining is not None:
+            header_parts.append("Oferta".rjust(col_width))
+        if row_penalties is not None:
+            header_parts.append("Pen.F".rjust(col_width))
+        header = " " * (col_width + 2) + "  ".join(header_parts)
+
         lines = [header]
+
+        # ── Filas de datos ──
         for i, row in enumerate(matrix):
-            vals = "  ".join(f"{v:.2f}".rjust(col_width) for v in row)
-            lines.append(f"{row_labels[i].rjust(col_width)}  {vals}")
+            parts = [f"{v:.2f}".rjust(col_width) for v in row]
+            if supply_remaining is not None:
+                parts.append(_fmt(supply_remaining[i]).rjust(col_width))
+            if row_penalties is not None:
+                parts.append(_fmt(row_penalties[i]).rjust(col_width))
+            lines.append(f"{row_labels[i].rjust(col_width)}  {'  '.join(parts)}")
+
+        # ── Fila de demanda ──
+        if demand_remaining is not None:
+            dem_parts = [_fmt(demand_remaining[j]).rjust(col_width) for j in range(n)]
+            # Celdas vacías para las columnas extra (Oferta, Pen.F)
+            if supply_remaining is not None:
+                dem_parts.append(" " * col_width)
+            if row_penalties is not None:
+                dem_parts.append(" " * col_width)
+            lines.append(f"{'Demanda'.rjust(col_width)}  {'  '.join(dem_parts)}")
+
+        # ── Fila de penalizaciones de columna ──
+        if col_penalties is not None:
+            pen_parts = [_fmt(col_penalties[j]).rjust(col_width) for j in range(n)]
+            if supply_remaining is not None:
+                pen_parts.append(" " * col_width)
+            if row_penalties is not None:
+                pen_parts.append(" " * col_width)
+            lines.append(f"{'Pen.C'.rjust(col_width)}  {'  '.join(pen_parts)}")
 
         return "\n".join(lines)

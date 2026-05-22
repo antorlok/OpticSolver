@@ -107,6 +107,10 @@ class TransportSolver(BaseTransportSolver):
             elif demand[j] == 0:
                 cancelled_cols[j] = True
             
-            self._add_allocation_step(steps, allocation, row_labels, col_labels)
+            self._add_allocation_step(
+                steps, allocation, row_labels, col_labels,
+                supply_remaining=list(supply),
+                demand_remaining=list(demand),
+            )
 
         return allocation

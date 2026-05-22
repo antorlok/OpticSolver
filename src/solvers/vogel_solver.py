@@ -5,7 +5,7 @@ Hereda de BaseTransportSolver la validación, balanceo y formateo.
 Implementa la lógica de asignación utilizando penalizaciones.
 """
 
-from typing import List
+from typing import List, Optional
 from core.base_solver import BaseTransportSolver
 
 
@@ -57,7 +57,11 @@ class VogelSolver(BaseTransportSolver):
                             f"Asignación = {alloc:.2f}. Oferta restante = {supply[i]:.2f}, "
                             f"Demanda restante = {demand[j]:.2f}."
                         )
-                        self._add_allocation_step(steps, allocation, row_labels, col_labels)
+                        self._add_allocation_step(
+                            steps, allocation, row_labels, col_labels,
+                            supply_remaining=list(supply),
+                            demand_remaining=list(demand),
+                        )
                 break
 
             # Si solo queda una columna activa, asignar por menor costo en esa columna
@@ -77,7 +81,11 @@ class VogelSolver(BaseTransportSolver):
                             f"Asignación = {alloc:.2f}. Oferta restante = {supply[i]:.2f}, "
                             f"Demanda restante = {demand[j]:.2f}."
                         )
-                        self._add_allocation_step(steps, allocation, row_labels, col_labels)
+                        self._add_allocation_step(
+                            steps, allocation, row_labels, col_labels,
+                            supply_remaining=list(supply),
+                            demand_remaining=list(demand),
+                        )
                 break
 
             # Calcular penalizaciones de filas
@@ -162,6 +170,22 @@ class VogelSolver(BaseTransportSolver):
                 active_cols[j] = False
                 steps.append(f"  → Se tachó la columna {j}.")
             
-            self._add_allocation_step(steps, allocation, row_labels, col_labels)
+            # Construir vectores de penalización para la tabla (None = fila/col inactiva)
+            rp_display: List[Optional[float]] = [
+                pen_val if active_rows[idx] else None
+                for pen_val, idx in row_penalties
+            ]
+            cp_display: List[Optional[float]] = [
+                pen_val if active_cols[idx] else None
+                for pen_val, idx in col_penalties
+            ]
+
+            self._add_allocation_step(
+                steps, allocation, row_labels, col_labels,
+                supply_remaining=list(supply),
+                demand_remaining=list(demand),
+                row_penalties=rp_display,
+                col_penalties=cp_display,
+            )
 
         return allocation
