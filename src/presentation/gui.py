@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox
 from solvers.transport_solver import TransportSolver
 from solvers.northwest_solver import NorthwestCornerSolver
 from solvers.vogel_solver import VogelSolver
+from solvers.hungarian_solver import HungarianSolver
 from services.groq_client import GroqClient
 
 class CalculadoraGUI:
@@ -67,12 +68,18 @@ class CalculadoraGUI:
         self.root.option_add('*TCombobox*Listbox.selectBackground', self.primary_color)
         self.root.option_add('*TCombobox*Listbox.selectForeground', 'white')
         
-        # Solvers
-        self.solvers = {
+        # Solvers de transporte (requieren oferta/demanda)
+        self.transport_solvers = {
             "Costo Mínimo": TransportSolver,
             "Esquina Noroeste": NorthwestCornerSolver,
-            "Método de Vogel": VogelSolver
+            "Método de Vogel": VogelSolver,
         }
+        # Solvers de asignación (solo matriz cuadrada de costos)
+        self.assignment_solvers = {
+            "Método Húngaro": HungarianSolver,
+        }
+        # Todos los métodos disponibles para el combobox
+        self.all_methods = list(self.transport_solvers.keys()) + list(self.assignment_solvers.keys())
         
         # Header Superior (Logotipo Tipográfico)
         self.header_frame = ttk.Frame(self.root, style="Header.TFrame")
@@ -115,42 +122,135 @@ class CalculadoraGUI:
         form_frame = ttk.Frame(card, style="Card.TFrame")
         form_frame.pack(fill="x")
         
-        # Plantas
-        ttk.Label(form_frame, text="Número de Plantas (Orígenes):", style="Card.TLabel").grid(row=0, column=0, padx=5, pady=15, sticky="w")
+        # ── Método (primero, para reaccionar al cambio) ──
+        ttk.Label(form_frame, text="Método de Resolución:", style="Card.TLabel").grid(row=0, column=0, padx=5, pady=15, sticky="w")
+        self.method_var = tk.StringVar(value="Costo Mínimo")
+        method_cb = ttk.Combobox(form_frame, textvariable=self.method_var, values=self.all_methods, state="readonly", font=("Segoe UI", 11), width=18)
+        method_cb.grid(row=0, column=1, padx=5, pady=15)
+        
+        # ── Labels dinámicas (cambian según el método) ──
+        self._lbl_dim1 = ttk.Label(form_frame, text="Número de Plantas (Orígenes):", style="Card.TLabel")
+        self._lbl_dim1.grid(row=1, column=0, padx=5, pady=15, sticky="w")
         self.plants_var = tk.StringVar(value="3")
         plant_entry = ttk.Entry(form_frame, textvariable=self.plants_var, width=15, font=("Segoe UI", 11))
-        plant_entry.grid(row=0, column=1, padx=5, pady=15)
+        plant_entry.grid(row=1, column=1, padx=5, pady=15)
         
-        # Ciudades
-        ttk.Label(form_frame, text="Número de Ciudades (Destinos):", style="Card.TLabel").grid(row=1, column=0, padx=5, pady=15, sticky="w")
+        self._lbl_dim2 = ttk.Label(form_frame, text="Número de Ciudades (Destinos):", style="Card.TLabel")
+        self._lbl_dim2.grid(row=2, column=0, padx=5, pady=15, sticky="w")
         self.cities_var = tk.StringVar(value="4")
         city_entry = ttk.Entry(form_frame, textvariable=self.cities_var, width=15, font=("Segoe UI", 11))
-        city_entry.grid(row=1, column=1, padx=5, pady=15)
+        city_entry.grid(row=2, column=1, padx=5, pady=15)
         
-        # Método
-        ttk.Label(form_frame, text="Método de Resolución:", style="Card.TLabel").grid(row=2, column=0, padx=5, pady=15, sticky="w")
-        self.method_var = tk.StringVar(value="Costo Mínimo")
-        method_cb = ttk.Combobox(form_frame, textvariable=self.method_var, values=list(self.solvers.keys()), state="readonly", font=("Segoe UI", 11), width=18)
-        method_cb.grid(row=2, column=1, padx=5, pady=15)
+        # Callback para actualizar labels según método
+        def _on_method_change(*_):
+            if self.method_var.get() in self.assignment_solvers:
+                self._lbl_dim1.config(text="Número de Agentes (Filas):")
+                self._lbl_dim2.config(text="Número de Tareas (Columnas):")
+            else:
+                self._lbl_dim1.config(text="Número de Plantas (Orígenes):")
+                self._lbl_dim2.config(text="Número de Ciudades (Destinos):")
+
+        self.method_var.trace_add("write", _on_method_change)
         
         # Botón
         btn_frame = ttk.Frame(card, style="Card.TFrame")
         btn_frame.pack(fill="x", pady=(30, 0))
         ttk.Button(btn_frame, text="Siguiente ➔", style="Primary.TButton", command=self.go_to_matrix).pack(side="right")
 
+    def _is_hungarian(self) -> bool:
+        return self.method_var.get() in self.assignment_solvers
+
     def go_to_matrix(self):
         try:
-            num_plants = int(self.plants_var.get())
-            num_cities = int(self.cities_var.get())
-            if num_plants <= 0 or num_cities <= 0:
+            num_rows = int(self.plants_var.get())
+            num_cols = int(self.cities_var.get())
+            if num_rows <= 0 or num_cols <= 0:
                 raise ValueError
         except ValueError:
             messagebox.showerror("Error", "Por favor ingrese números enteros mayores a 0.")
             return
-            
-        self.switch_frame(self._build_matrix_frame, num_plants, num_cities)
 
-    # ─── Pantalla 2: Ingreso de Datos ──────────────────────────────────────────
+        if self._is_hungarian():
+            self.switch_frame(self._build_hungarian_matrix_frame, num_rows, num_cols)
+        else:
+            self.switch_frame(self._build_matrix_frame, num_rows, num_cols)
+
+    # ─── Pantalla 2a: Ingreso de Datos (Húngaro — solo costos) ─────────────────
+    def _build_hungarian_matrix_frame(self, frame, num_agents, num_tasks):
+        top_frame = ttk.Frame(frame, style="TFrame")
+        top_frame.pack(fill="x", pady=(0, 20))
+
+        ttk.Label(top_frame, text="Ingreso de Datos — Asignación", style="Title.TLabel", background=self.bg_color).pack(side="left")
+        ttk.Label(top_frame, text="Completa la matriz de costos (Agente → Tarea)", style="Subtitle.TLabel", background=self.bg_color).pack(side="left", padx=15)
+
+        card = tk.Frame(frame, bg=self.card_color, highlightbackground=self.accent_color, highlightthickness=1)
+        card.pack(fill="both", expand=True)
+
+        canvas = tk.Canvas(card, bg=self.card_color, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(card, orient="vertical", command=canvas.yview)
+        scroll_x = ttk.Scrollbar(card, orient="horizontal", command=canvas.xview)
+        scrollable_frame = ttk.Frame(canvas, style="Card.TFrame")
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set, xscrollcommand=scroll_x.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=20, pady=20)
+        scrollbar.pack(side="right", fill="y")
+        scroll_x.pack(side="bottom", fill="x")
+
+        self.cost_entries = []
+        self.agent_name_entries = []
+        self.task_name_entries = []
+
+        # Cabecera: nombres de tareas
+        ttk.Label(scrollable_frame, text="Agentes \\ Tareas", style="MatrixHeader.TLabel", background=self.card_color).grid(row=0, column=0, padx=10, pady=10)
+        for j in range(num_tasks):
+            entry = ttk.Entry(scrollable_frame, width=12, font=("Segoe UI", 10), justify="center")
+            entry.insert(0, f"Tarea {j+1}")
+            entry.grid(row=0, column=j+1, padx=5, pady=10)
+            self.task_name_entries.append(entry)
+
+        # Filas: nombres de agentes + costos
+        for i in range(num_agents):
+            name_entry = ttk.Entry(scrollable_frame, width=12, font=("Segoe UI", 10), justify="center")
+            name_entry.insert(0, f"Agente {i+1}")
+            name_entry.grid(row=i+1, column=0, padx=10, pady=5)
+            self.agent_name_entries.append(name_entry)
+
+            row_entries = []
+            for j in range(num_tasks):
+                entry = ttk.Entry(scrollable_frame, width=10, font=("Segoe UI", 11), justify="center")
+                entry.grid(row=i+1, column=j+1, padx=5, pady=5)
+                row_entries.append(entry)
+            self.cost_entries.append(row_entries)
+
+        btn_frame = ttk.Frame(frame, style="TFrame")
+        btn_frame.pack(fill="x", pady=(20, 0))
+        ttk.Button(btn_frame, text="🡨 Volver", style="Secondary.TButton", command=self.create_setup_frame).pack(side="left")
+        ttk.Button(btn_frame, text="Resolver Problema ➔", style="Primary.TButton", command=self.solve_hungarian).pack(side="right")
+
+    def solve_hungarian(self):
+        """Recolecta datos de la tabla de asignación y resuelve con Método Húngaro."""
+        try:
+            agent_names = [e.get().strip() for e in self.agent_name_entries]
+            task_names = [e.get().strip() for e in self.task_name_entries]
+
+            costs = []
+            for row in self.cost_entries:
+                costs.append([float(e.get()) for e in row])
+        except ValueError:
+            messagebox.showerror("Error de Datos", "Todos los costos deben ser numéricos.")
+            return
+
+        try:
+            solver = HungarianSolver(costs)
+            result = solver.solve(row_labels=agent_names, col_labels=task_names)
+            self.switch_frame(self._build_results_frame, result)
+        except Exception as e:
+            messagebox.showerror("Error", f"Ocurrió un error al resolver:\n{str(e)}")
+
+    # ─── Pantalla 2b: Ingreso de Datos (Transporte — costos + oferta/demanda) ──
     def _build_matrix_frame(self, frame, num_plants, num_cities):
         top_frame = ttk.Frame(frame, style="TFrame")
         top_frame.pack(fill="x", pady=(0, 20))
@@ -224,6 +324,7 @@ class CalculadoraGUI:
         ttk.Button(btn_frame, text="Resolver Problema ➔", style="Primary.TButton", command=self.solve_problem).pack(side="right")
 
     def solve_problem(self):
+        """Recolecta datos de la tabla de transporte y resuelve."""
         try:
             plant_names = [e.get().strip() for e in self.plant_name_entries]
             city_names = [e.get().strip() for e in self.city_name_entries]
@@ -239,7 +340,10 @@ class CalculadoraGUI:
             return
 
         method_name = self.method_var.get()
-        solver_class = self.solvers[method_name]
+        solver_class = self.transport_solvers.get(method_name)
+        if solver_class is None:
+            messagebox.showerror("Error", f"Método '{method_name}' no encontrado.")
+            return
         
         try:
             solver = solver_class(costs, supply, demand)
