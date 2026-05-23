@@ -183,6 +183,22 @@ class CalculadoraGUI:
         ttk.Label(top_frame, text="Ingreso de Datos — Asignación", style="Title.TLabel", background=self.bg_color).pack(side="left")
         ttk.Label(top_frame, text="Completa la matriz de costos (Agente → Tarea)", style="Subtitle.TLabel", background=self.bg_color).pack(side="left", padx=15)
 
+        # ── Selector Objetivo (Minimizar / Maximizar) con un Combobox Estilizado ──
+        opt_frame = ttk.Frame(frame, style="TFrame")
+        opt_frame.pack(fill="x", pady=(0, 15))
+        
+        ttk.Label(opt_frame, text="Objetivo del Problema:", style="TLabel").pack(side="left", padx=(0, 10))
+        self.objective_var = tk.StringVar(value="Minimizar")
+        objective_cb = ttk.Combobox(
+            opt_frame, 
+            textvariable=self.objective_var, 
+            values=["Minimizar", "Maximizar"], 
+            state="readonly", 
+            font=("Segoe UI", 11), 
+            width=15
+        )
+        objective_cb.pack(side="left")
+
         card = tk.Frame(frame, bg=self.card_color, highlightbackground=self.accent_color, highlightthickness=1)
         card.pack(fill="both", expand=True)
 
@@ -244,8 +260,11 @@ class CalculadoraGUI:
             return
 
         try:
-            solver = HungarianSolver(costs)
+            is_max = self.objective_var.get() == "Maximizar"
+            solver = HungarianSolver(costs, is_maximization=is_max)
             result = solver.solve(row_labels=agent_names, col_labels=task_names)
+            # Guardar flag para el reporte
+            result._is_maximization = is_max
             self.switch_frame(self._build_results_frame, result)
         except Exception as e:
             messagebox.showerror("Error", f"Ocurrió un error al resolver:\n{str(e)}")
@@ -407,7 +426,12 @@ class CalculadoraGUI:
         content.append("\n📊 MATRIZ DE ASIGNACIONES FINALES:")
         content.append(result.formatted_allocation_matrix)
         
-        content.append(f"\n💰 COSTO TOTAL MÍNIMO: {result.total_cost:.2f}")
+        # Ajustar etiqueta según modo (maximización vs minimización)
+        is_max = getattr(result, '_is_maximization', False)
+        if is_max:
+            content.append(f"\n💰 BENEFICIO TOTAL MÁXIMO: {result.total_cost:.2f}")
+        else:
+            content.append(f"\n💰 COSTO TOTAL MÍNIMO: {result.total_cost:.2f}")
         return "\n".join(content)
 
     def save_to_txt(self, content, filename="reporte_transporte.txt"):
